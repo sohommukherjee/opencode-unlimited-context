@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { appendFile, mkdir } from "node:fs/promises"
+import { appendFile, mkdir, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 
 // /cut — drop the oldest N thousand tokens from the model context.
@@ -10,6 +10,7 @@ import { dirname } from "node:path"
 // never deleted: the cut is applied to the request only.
 const UNIT = 1_000
 const LOG = "/tmp/opencode/cut.log"
+const TOAST = "/tmp/opencode/cut.toast"
 const CAP = 10_000_000
 const DEFAULT = 200
 
@@ -30,6 +31,17 @@ const note = async (line: string) => {
 }
 
 const weight = (m: Msg) => Math.ceil(JSON.stringify(m).length / 4)
+
+// The TUI half watches this file and turns each new value into a toast. A
+// server plugin has no direct access to the terminal UI.
+const announce = async (message: string, variant: "info" | "success" | "warning" | "error" = "info") => {
+  try {
+    await mkdir(dirname(TOAST), { recursive: true })
+    await writeFile(TOAST, `${Date.now()}|${variant}|${message}`)
+  } catch {
+    // A missing toast is not worth failing a command over.
+  }
+}
 
 // Keep only the turn being answered, for a depth past the end of the transcript.
 const lastTurn = (messages: Msg[]): number => {
@@ -105,17 +117,25 @@ export default Plugin.define({
           if (raw === "status") {
             const value = await depth(sessionID)
             const last = applied.get(sessionID)
-            note(
-              last
-                ? `status ${sessionID} depth=${value} before=${last.before} cut=${last.before - last.after} dropped≈${last.dropped} visible=${last.after}`
-                : `status ${sessionID} depth=${value} last=none`,
-            )
+            if (last) {
+              const cut = last.before - last.after
+              note(
+                `status ${sessionID} depth=${value} before=${last.before} cut=${cut} dropped≈${last.dropped} visible=${last.after}`,
+              )
+              announce(
+                `Depth ${value / UNIT}k · last request cut ${cut} msgs (~${Math.round(last.dropped / 100) / 10}k tokens), ${last.after} msgs sent`,
+              )
+            } else {
+              note(`status ${sessionID} depth=${value} last=none`)
+              announce(`Depth ${value / UNIT}k · no request since the last change`)
+            }
             return
           }
 
           const args = raw.toLowerCase()
           if (args !== "" && !/^-?\d+k?$/.test(args)) {
             note(`invalid ${sessionID} args=${JSON.stringify(raw)}`)
+            announce("Use /cut 50, /cut -50, /cut 0 or /cut status", "warning")
             return
           }
 
@@ -123,6 +143,7 @@ export default Plugin.define({
           const n = number === "" ? DEFAULT : Number(number)
           if (!Number.isSafeInteger(n) || Math.abs(n) > CAP / UNIT) {
             note(`range ${sessionID} n=${n}`)
+            announce("That number is out of range", "warning")
             return
           }
 
@@ -130,6 +151,7 @@ export default Plugin.define({
             await set(sessionID, 0)
             applied.delete(sessionID)
             note(`reset ${sessionID}`)
+            announce("Cut cleared · full history restored", "success")
             return
           }
 
@@ -137,6 +159,7 @@ export default Plugin.define({
           await set(sessionID, value)
           applied.delete(sessionID)
           note(`set ${sessionID} n=${n} depth=${value}`)
+          announce(`Cut ${n > 0 ? "+" : ""}${n}k · depth ${value / UNIT}k`, "success")
         },
       })
     })
