@@ -15,7 +15,7 @@ const DEFAULT = 200
 
 // Notices are stored so the terminal can show them, but they must never reach
 // the model: they would arrive as user turns and shift the cut boundary.
-const MARK = "\u2063"
+const MARK = "[cut] "
 
 type Msg = { role: string; content?: unknown[] }
 type Applied = { at: number; before: number; after: number; dropped: number }
