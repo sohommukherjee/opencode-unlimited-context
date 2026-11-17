@@ -42,7 +42,7 @@ OpenCode reloads plugins when the config changes. If it does not, run `/reload`.
 
 One number is one thousand tokens. Cuts stack, so `/cut 50` twice is 100k. Restores stack too, and stop at zero rather than going negative.
 
-Every command posts a short notice in the session with the new depth, and `/cut status` reports the numbers from the last real request. A server plugin cannot draw terminal toasts in OpenCode 2.3, so the notice is the visible confirmation. The notice is tagged and stripped from the model request, so it never becomes context.
+Every command posts a short notice in the session with the new depth, prefixed with `[cut]` so it is easy to spot. `/cut status` reports the numbers from the last real request. A server plugin cannot draw terminal toasts in OpenCode 2.3, so the notice is the visible confirmation. The notice is tagged and stripped from the model request, so it never becomes context.
 
 ## How it works
 
