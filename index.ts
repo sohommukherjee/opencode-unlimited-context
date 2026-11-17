@@ -13,8 +13,18 @@ const LOG = "/tmp/opencode/cut.log"
 const CAP = 10_000_000
 const DEFAULT = 200
 
+// Notices are stored so the terminal can show them, but they must never reach
+// the model: they would arrive as user turns and shift the cut boundary.
+const MARK = "\u2063"
+
 type Msg = { role: string; content?: unknown[] }
 type Applied = { at: number; before: number; after: number; dropped: number }
+
+const isNotice = (m: Msg): boolean => {
+  if (m.role !== "user" || !Array.isArray(m.content) || m.content.length === 0) return false
+  const first = m.content[0] as { type?: string; text?: string }
+  return first?.type === "text" && typeof first.text === "string" && first.text.startsWith(MARK)
+}
 
 const ready: { log: Promise<unknown> | undefined } = { log: undefined }
 
@@ -95,10 +105,11 @@ export default Plugin.define({
     }
 
     // A server plugin cannot reach the terminal UI, so results are posted as a
-    // synthetic notice in the session, which the TUI shows immediately.
+    // synthetic notice in the session, which the TUI shows immediately. The
+    // marker keeps the notice out of the model request.
     const say = async (sessionID: string, text: string) => {
       try {
-        await ctx.session.synthetic({ sessionID, text, resume: false })
+        await ctx.session.synthetic({ sessionID, text: `${MARK}${text}`, resume: false })
       } catch (error) {
         note(`synthetic ${sessionID} failed ${String(error)}`)
       }
@@ -164,6 +175,11 @@ export default Plugin.define({
     })
 
     await ctx.session.hook("context", async (event) => {
+      // Notices are UI-only; keep them out of the model request.
+      for (let i = event.messages.length - 1; i >= 0; i--) {
+        if (isNotice(event.messages[i] as Msg)) event.messages.splice(i, 1)
+      }
+
       const value = await depth(event.sessionID)
       if (!value) return
 
