@@ -45,7 +45,7 @@ A local clone gives you the server half: the command and the notices in the chat
 
 One number is one thousand tokens. Cuts stack, so `/cut 50` twice is 100k. Restores stack too, and stop at zero rather than going negative.
 
-Every command posts a short notice in the session with the new depth, prefixed with `[cut]` so it is easy to spot. `/cut status` reports the numbers from the last request that actually cut. The notice is tagged in its metadata and stripped from every model request, so it never becomes context and never shifts the cut boundary.
+Every command posts a short notice in the session, prefixed with `[cut]`, showing the total amount removed, for example `200k context removed`. `/cut status` reports the same total. The notice is tagged in its metadata and stripped from every model request, so it never becomes context and never shifts the cut boundary.
 
 ## How it works
 

@@ -21,9 +21,11 @@ type Msg = {
   content?: unknown[]
   metadata?: Record<string, unknown>
 }
-type Last = { depth: number; before: number; after: number; dropped: number; at: number }
 type Read = { ok: true; value: number } | { ok: false }
 type Event = { sessionID: string; messages: unknown[] }
+
+// Human-facing amount: "0", "50k", "200k", "500k".
+const amount = (value: number) => (value <= 0 ? "0" : `${Math.round(value / UNIT)}k`)
 
 // Notices carry this flag in their stored metadata, which survives into the
 // context messages. Matching text instead would delete a real user message that
@@ -139,24 +141,6 @@ export default Plugin.define({
       await ctx.storage.set(`cut/${sid}`, { depth: value, at: Date.now() })
     }
 
-    const readLast = async (sid: string): Promise<Last | undefined> => {
-      try {
-        const value = (await ctx.storage.get(`cut/${sid}/last`)) as Partial<Last> | undefined
-        if (!value || typeof value.at !== "number") return undefined
-        return value as Last
-      } catch {
-        return undefined
-      }
-    }
-
-    const writeLast = async (sid: string, last: Last) => {
-      try {
-        await ctx.storage.set(`cut/${sid}/last`, last)
-      } catch (error) {
-        note(`last ${sid} failed ${String(error)}`)
-      }
-    }
-
     // A server plugin cannot reach the terminal UI directly, so results go two
     // ways: a small file the TUI half turns into a toast, and a synthetic notice
     // in the session. The toast is written first so a slow session call cannot
@@ -186,7 +170,7 @@ export default Plugin.define({
     await ctx.command.transform((editor) => {
       editor.add({
         name: "cut",
-        description: "Drop the oldest N thousand tokens (negative restores, 0 resets, default 200)",
+        description: "Remove the oldest N thousand tokens (negative restores, 0 clears)",
         execute: async ({ sessionID, prompt }) => {
           const raw = String(prompt?.text ?? "").trim().toLowerCase()
           note(`command ${sessionID} args=${JSON.stringify(raw)}`)
@@ -194,27 +178,11 @@ export default Plugin.define({
           if (raw === "status") {
             const current = await read(sessionID)
             if (!current.ok) {
-              await say(sessionID, "Could not read the cut depth · try again")
+              await say(sessionID, "Could not read the cut state · try again")
               return
             }
-            const value = current.value
-            const last = await readLast(sessionID)
-            if (last && value > 0) {
-              const cut = last.before - last.after
-              note(
-                `status ${sessionID} depth=${value} at=${last.depth} before=${last.before} cut=${cut} dropped≈${last.dropped} visible=${last.after}`,
-              )
-              await say(
-                sessionID,
-                `Cut depth ${value / UNIT}k · last request at depth ${last.depth / UNIT}k cut ${cut} msgs (~${Math.round(last.dropped / 100) / 10}k tokens), ${last.after} msgs sent`,
-              )
-            } else if (value > 0) {
-              note(`status ${sessionID} depth=${value} last=none`)
-              await say(sessionID, `Cut depth ${value / UNIT}k · armed, no request cut yet`)
-            } else {
-              note(`status ${sessionID} depth=0 last=none`)
-              await say(sessionID, "Nothing is cut right now")
-            }
+            note(`status ${sessionID} depth=${current.value}`)
+            await say(sessionID, `${amount(current.value)} context removed`)
             return
           }
 
@@ -235,21 +203,20 @@ export default Plugin.define({
           await serial(sessionID, async () => {
             const current = await read(sessionID)
             if (!current.ok) {
-              await say(sessionID, "Could not read the cut depth · try again")
+              await say(sessionID, "Could not read the cut state · try again")
               return
             }
 
             if (n === 0) {
               try {
                 await write(sessionID, 0)
-                await ctx.storage.remove(`cut/${sessionID}/last`)
               } catch (error) {
-                note(`reset ${sessionID} failed ${String(error)}`)
-                await say(sessionID, "Could not clear the cut depth · try again")
+                note(`clear ${sessionID} failed ${String(error)}`)
+                await say(sessionID, "Could not clear the cut · try again")
                 return
               }
-              note(`reset ${sessionID}`)
-              await say(sessionID, "Cut cleared · full history restored")
+              note(`clear ${sessionID}`)
+              await say(sessionID, "0 context removed")
               return
             }
 
@@ -258,14 +225,11 @@ export default Plugin.define({
               await write(sessionID, value)
             } catch (error) {
               note(`set ${sessionID} failed ${String(error)}`)
-              await say(sessionID, "Could not save the cut depth · try again")
+              await say(sessionID, "Could not save the cut · try again")
               return
             }
             note(`set ${sessionID} n=${n} depth=${value}`)
-            await say(
-              sessionID,
-              `Cut ${n > 0 ? "+" : ""}${n}k · depth ${value / UNIT}k · applies on your next message`,
-            )
+            await say(sessionID, `${amount(value)} context removed`)
           })
         },
       })
@@ -295,8 +259,6 @@ export default Plugin.define({
       const before = event.messages.length
       const { cut: count, dropped } = plan(event.messages as Msg[], value)
       if (count <= 0) {
-        const record = { depth: value, before, after: before, dropped: 0, at: Date.now() }
-        void writeLast(event.sessionID, record)
         note(`noop ${event.sessionID} depth=${value} msgs=${before}`)
         return
       }
@@ -304,8 +266,6 @@ export default Plugin.define({
       const from = (event.messages[count] as Msg).role
       const prev = (event.messages[count - 1] as Msg).role
       event.messages.splice(0, count)
-      const record = { depth: value, before, after: before - count, dropped, at: Date.now() }
-      void writeLast(event.sessionID, record)
       note(
         `apply ${event.sessionID} depth=${value} dropped≈${dropped} msgs=${before}->${before - count} cut=${count} ${prev}->${from}`,
       )
