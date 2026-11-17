@@ -199,7 +199,7 @@ export default Plugin.define({
             }
             const value = current.value
             const last = await readLast(sessionID)
-            if (last) {
+            if (last && value > 0) {
               const cut = last.before - last.after
               note(
                 `status ${sessionID} depth=${value} at=${last.depth} before=${last.before} cut=${cut} dropped≈${last.dropped} visible=${last.after}`,
@@ -208,9 +208,12 @@ export default Plugin.define({
                 sessionID,
                 `Cut depth ${value / UNIT}k · last request at depth ${last.depth / UNIT}k cut ${cut} msgs (~${Math.round(last.dropped / 100) / 10}k tokens), ${last.after} msgs sent`,
               )
-            } else {
+            } else if (value > 0) {
               note(`status ${sessionID} depth=${value} last=none`)
-              await say(sessionID, `Cut depth ${value / UNIT}k · armed, no request since the plugin started`)
+              await say(sessionID, `Cut depth ${value / UNIT}k · armed, no request cut yet`)
+            } else {
+              note(`status ${sessionID} depth=0 last=none`)
+              await say(sessionID, "Nothing is cut right now")
             }
             return
           }
