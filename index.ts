@@ -172,9 +172,9 @@ export default Plugin.define({
         await ctx.session.synthetic({
           sessionID,
           text: `${MARK}${text}`,
-          // A synthetic message without a description is dropped from the
-          // timeline, so the notice would be stored and never shown.
-          description: "cut",
+          // The timeline renders a synthetic message's description, not its
+          // text, and drops it entirely when the description is empty.
+          description: text,
           metadata: { cutNotice: true },
           resume: false,
         })
