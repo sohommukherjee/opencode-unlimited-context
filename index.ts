@@ -137,7 +137,7 @@ export default Plugin.define({
               )
             } else {
               note(`status ${sessionID} depth=${value} last=none`)
-              await say(sessionID, `Cut depth ${value / UNIT}k · no request since the last change`)
+              await say(sessionID, `Cut depth ${value / UNIT}k · armed, no request since the last change`)
             }
             return
           }
@@ -169,7 +169,7 @@ export default Plugin.define({
           await set(sessionID, value)
           applied.delete(sessionID)
           note(`set ${sessionID} n=${n} depth=${value}`)
-          await say(sessionID, `Cut ${n > 0 ? "+" : ""}${n}k · depth ${value / UNIT}k`)
+          await say(sessionID, `Cut ${n > 0 ? "+" : ""}${n}k · depth ${value / UNIT}k · applies on your next message`)
         },
       })
     })
