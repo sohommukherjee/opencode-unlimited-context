@@ -33,6 +33,7 @@ OpenCode reloads plugins when the config changes. If it does not, run `/reload`.
 | Command | Effect |
 | --- | --- |
 | `/cut 50` | Drop another 50,000 tokens from the oldest end |
+| `/cut 50k` | Same thing, if you like the suffix |
 | `/cut 10` | Drop another 10,000 tokens |
 | `/cut 500` | Drop another 500,000 tokens |
 | `/cut -50` | Put the last 50,000 tokens back |

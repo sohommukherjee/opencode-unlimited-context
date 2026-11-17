@@ -113,12 +113,14 @@ export default Plugin.define({
             return
           }
 
-          if (raw !== "" && !/^-?\d+$/.test(raw)) {
+          const args = raw.toLowerCase()
+          if (args !== "" && !/^-?\d+k?$/.test(args)) {
             note(`invalid ${sessionID} args=${JSON.stringify(raw)}`)
             return
           }
 
-          const n = raw === "" ? DEFAULT : Number(raw)
+          const number = args.replace(/k$/, "")
+          const n = number === "" ? DEFAULT : Number(number)
           if (!Number.isSafeInteger(n) || Math.abs(n) > CAP / UNIT) {
             note(`range ${sessionID} n=${n}`)
             return
