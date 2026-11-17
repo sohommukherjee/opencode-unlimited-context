@@ -5,6 +5,6 @@
   "main": "./index.ts",
   "exports": {
     ".": "./index.ts",
-    "./tui": "./tui.tsx"
+    "./server": "./index.ts"
   }
 }
