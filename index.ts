@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { appendFile, mkdir } from "node:fs/promises"
+import { appendFile, mkdir, writeFile } from "node:fs/promises"
 import { dirname } from "node:path"
 
 // /cut — drop the oldest N thousand tokens from the model context.
@@ -10,6 +10,7 @@ import { dirname } from "node:path"
 // never deleted: the cut is applied to the request only.
 const UNIT = 1_000
 const LOG = "/tmp/opencode/cut.log"
+const TOAST = "/tmp/opencode/cut.toast"
 const CAP = 10_000_000
 const DEFAULT = 200
 
@@ -104,14 +105,20 @@ export default Plugin.define({
       await ctx.storage.set(`cut/${sid}`, { depth: value, at: Date.now() })
     }
 
-    // A server plugin cannot reach the terminal UI, so results are posted as a
-    // synthetic notice in the session, which the TUI shows immediately. The
-    // marker keeps the notice out of the model request.
+    // A server plugin cannot reach the terminal UI directly, so results go two
+    // ways: a synthetic notice in the session for the chat, and a small file the
+    // TUI half watches to raise a toast.
     const say = async (sessionID: string, text: string) => {
       try {
         await ctx.session.synthetic({ sessionID, text: `${MARK}${text}`, resume: false })
       } catch (error) {
         note(`synthetic ${sessionID} failed ${String(error)}`)
+      }
+      try {
+        await mkdir(dirname(TOAST), { recursive: true })
+        await writeFile(TOAST, `${Date.now()}|info|${text}`)
+      } catch (error) {
+        note(`toast ${sessionID} failed ${String(error)}`)
       }
     }
 
